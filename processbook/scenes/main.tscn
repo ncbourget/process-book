@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://bkedii2mqddm3"]
+
+[ext_resource type="PackedScene" uid="uid://bxtwsfrrc2rd8" path="res://scenes/book.tscn" id="1_o5qli"]
+
+[sub_resource type="Environment" id="Environment_0wfyh"]
+
+[node name="Main" type="Node3D" unique_id=106177869]
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1600980026]
+transform = Transform3D(1, 0, 0, 0, 0.32383484, 0.94611365, 0, -0.94611365, 0.32383484, 0, 5.827839, 1.793529)
+fov = 20.1
+near = 0.511
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=253211214]
+environment = SubResource("Environment_0wfyh")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=285950148]
+transform = Transform3D(1, 0, 0, 0, 0.07276817, 0.9973489, 0, -0.9973489, 0.07276817, 0, 3.4735246, 0.27228832)
+
+[node name="Book" parent="." unique_id=633167642 instance=ExtResource("1_o5qli")]
+transform = Transform3D(8, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0)

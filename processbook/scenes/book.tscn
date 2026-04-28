@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://bxtwsfrrc2rd8"]
+
+[ext_resource type="Script" uid="uid://cimn32y1n5x8f" path="res://scenes/book.gd" id="1_ble1a"]
+[ext_resource type="PackedScene" uid="uid://d14l42kefy02b" path="res://scenes/page.tscn" id="2_3wpgy"]
+
+[node name="Book" type="Node3D" unique_id=633167642]
+script = ExtResource("1_ble1a")
+page_scene = ExtResource("2_3wpgy")
+pages_container_path = NodePath("Pages")
+loose_pages_container_path = NodePath("LoosePages")
+
+[node name="Pages" type="Node3D" parent="." unique_id=1978622790]
+
+[node name="LoosePages" type="Node3D" parent="." unique_id=1667946282]
