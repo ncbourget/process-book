@@ -1,12 +1,19 @@
 [gd_scene format=3 uid="uid://bkedii2mqddm3"]
 
 [ext_resource type="PackedScene" uid="uid://bxtwsfrrc2rd8" path="res://scenes/book.tscn" id="1_o5qli"]
+[ext_resource type="Texture2D" uid="uid://djj7yw352i4sv" path="res://book_pages/page_000.jpg" id="2_tefeu"]
+[ext_resource type="Texture2D" uid="uid://b2mkgn86cmvvq" path="res://book_pages/page_002.jpg" id="3_o6xl0"]
+[ext_resource type="Texture2D" uid="uid://btpdhboxcn75n" path="res://book_pages/page_003.jpg" id="4_tipki"]
+[ext_resource type="Texture2D" uid="uid://caao2ac7csajv" path="res://book_pages/page_004.jpg" id="5_85g3d"]
+[ext_resource type="Texture2D" uid="uid://c7mwp36tf36o7" path="res://book_pages/page_005.jpg" id="6_choun"]
 
 [sub_resource type="Environment" id="Environment_0wfyh"]
 
 [node name="Main" type="Node3D" unique_id=106177869]
 
-[node name="Camera3D" type="Camera3D" parent="." unique_id=1600980026]
+[node name="CameraRig" type="Node3D" parent="." unique_id=280783124]
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig" unique_id=1600980026]
 transform = Transform3D(1, 0, 0, 0, 0.32383484, 0.94611365, 0, -0.94611365, 0.32383484, 0, 5.827839, 1.793529)
 fov = 20.1
 near = 0.511
@@ -17,5 +24,8 @@ environment = SubResource("Environment_0wfyh")
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=285950148]
 transform = Transform3D(1, 0, 0, 0, 0.07276817, 0.9973489, 0, -0.9973489, 0.07276817, 0, 3.4735246, 0.27228832)
 
-[node name="Book" parent="." unique_id=633167642 instance=ExtResource("1_o5qli")]
+[node name="Book" parent="." unique_id=633167642 node_paths=PackedStringArray("camera_rig", "camera") instance=ExtResource("1_o5qli")]
 transform = Transform3D(8, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0)
+page_textures = Array[Texture2D]([ExtResource("2_tefeu"), ExtResource("3_o6xl0"), ExtResource("4_tipki"), ExtResource("5_85g3d"), ExtResource("6_choun")])
+camera_rig = NodePath("../CameraRig")
+camera = NodePath("../CameraRig/Camera3D")

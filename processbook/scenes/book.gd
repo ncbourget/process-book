@@ -2,10 +2,21 @@ extends Node3D
 
 @export var page_scene: PackedScene
 @export var pages_container_path: NodePath
-@export var pages_folder: String = "res://book_pages"
+
+# Web-safe: drag your page images here in order.
+@export var page_textures: Array[Texture2D] = []
 
 @export var page_thickness: float = 0.00005
 @export var turned_page_angle_step: float = -0.2
+
+# Camera zoom
+@export var camera_rig: Node3D
+@export var camera: Camera3D
+@export_range(0.0, 1.0, 0.001) var zoom: float = 0.0
+@export var zoom_scroll_sensitivity: float = 0.08
+@export var zoom_smooth_speed: float = 12.0
+@export var zoom_close_distance: float = 0.22
+@export var zoom_plane_y: float = 0.0
 
 # Fan mode
 @export var fan_angle_range_degrees: float = 160.0
@@ -16,7 +27,6 @@ extends Node3D
 
 @onready var pages_container: Node3D = get_node(pages_container_path) as Node3D
 
-var page_textures: Array[Texture2D] = []
 var sheets: Array[BookPage] = []
 var current_sheet_index: int = 0
 
@@ -27,9 +37,26 @@ var drag_target_left: bool = false
 var is_fan_mode: bool = false
 var fan_hovered_index: int = -1
 
+var zoom_target: float = 0.0
+var zoom_focus: Vector3 = Vector3.ZERO
+var base_camera_pos: Vector3 = Vector3.ZERO
+var base_camera_rot: Vector3 = Vector3.ZERO
+
 
 func _ready() -> void:
-	load_page_textures()
+	if camera == null:
+		camera = get_viewport().get_camera_3d()
+
+	if camera_rig == null and camera != null:
+		camera_rig = camera
+
+	if camera_rig != null:
+		base_camera_pos = camera_rig.global_position
+		base_camera_rot = camera_rig.rotation
+
+	zoom_target = zoom
+	zoom_focus = global_position
+
 	build_book()
 
 
@@ -42,6 +69,19 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mouse_event: InputEventMouseButton = event as InputEventMouseButton
+
+		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			commit_zoom_focus(mouse_event.position)
+			zoom_target = clamp(zoom_target + zoom_scroll_sensitivity, 0.0, 1.0)
+			return
+
+		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			commit_zoom_focus(mouse_event.position)
+			zoom_target = clamp(zoom_target - zoom_scroll_sensitivity, 0.0, 1.0)
+			return
+
 	if is_fan_mode:
 		if event is InputEventMouseButton:
 			var mb: InputEventMouseButton = event as InputEventMouseButton
@@ -60,45 +100,15 @@ func _input(event: InputEvent) -> void:
 				end_drag()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	update_zoom(delta)
+
 	if is_fan_mode:
 		fan_hovered_index = get_fan_page_from_mouse(get_viewport().get_mouse_position())
 		return
 
 	if is_dragging and drag_page != null:
 		update_drag()
-
-
-func load_page_textures() -> void:
-	page_textures.clear()
-
-	var dir: DirAccess = DirAccess.open(pages_folder)
-	if dir == null:
-		push_error("Could not open pages folder: %s" % pages_folder)
-		return
-
-	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
-	var file_names: Array[String] = []
-
-	while file_name != "":
-		if not dir.current_is_dir():
-			var lower: String = file_name.to_lower()
-			if lower.ends_with(".png") or lower.ends_with(".jpg") or lower.ends_with(".jpeg") or lower.ends_with(".webp"):
-				file_names.append(file_name)
-		file_name = dir.get_next()
-
-	dir.list_dir_end()
-	file_names.sort()
-
-	for name: String in file_names:
-		var full_path: String = "%s/%s" % [pages_folder, name]
-		var tex: Texture2D = load(full_path) as Texture2D
-		if tex != null:
-			page_textures.append(tex)
-
-	if page_textures.is_empty():
-		push_error("No page textures found in %s" % pages_folder)
 
 
 func build_book() -> void:
@@ -114,6 +124,7 @@ func build_book() -> void:
 	fan_hovered_index = -1
 
 	if page_textures.is_empty():
+		push_error("No page textures assigned. Drag your exported page images into the Page Textures array on the Book node.")
 		return
 
 	if page_textures.size() % 2 != 0:
@@ -149,6 +160,43 @@ func build_book() -> void:
 	normalize_current_sheet_index()
 
 
+func commit_zoom_focus(mouse_pos: Vector2) -> void:
+	if camera == null:
+		return
+
+	var ray_origin: Vector3 = camera.project_ray_origin(mouse_pos)
+	var ray_dir: Vector3 = camera.project_ray_normal(mouse_pos)
+
+	if abs(ray_dir.y) < 0.00001:
+		return
+
+	var t: float = (zoom_plane_y - ray_origin.y) / ray_dir.y
+	if t < 0.0:
+		return
+
+	zoom_focus = ray_origin + ray_dir * t
+
+
+func update_zoom(delta: float) -> void:
+	if camera_rig == null:
+		return
+
+	var smooth: float = 1.0 - exp(-zoom_smooth_speed * delta)
+	zoom = lerp(zoom, zoom_target, smooth)
+
+	var dir_from_focus: Vector3 = base_camera_pos - zoom_focus
+	if dir_from_focus.length() < 0.001:
+		return
+
+	var close_pos: Vector3 = zoom_focus + dir_from_focus.normalized() * zoom_close_distance
+	var desired_pos: Vector3 = base_camera_pos.lerp(close_pos, zoom)
+
+	camera_rig.global_position = camera_rig.global_position.lerp(desired_pos, smooth)
+	camera_rig.rotation.x = lerp_angle(camera_rig.rotation.x, base_camera_rot.x, smooth)
+	camera_rig.rotation.y = lerp_angle(camera_rig.rotation.y, base_camera_rot.y, smooth)
+	camera_rig.rotation.z = lerp_angle(camera_rig.rotation.z, base_camera_rot.z, smooth)
+
+
 func flip_current_sheet_forward() -> void:
 	var index: int = get_next_right_sheet_index()
 	if index == -1:
@@ -161,10 +209,7 @@ func flip_current_sheet_forward() -> void:
 
 
 func start_drag(mouse_pos: Vector2) -> void:
-	if sheets.is_empty():
-		return
-
-	if is_dragging:
+	if sheets.is_empty() or is_dragging:
 		return
 
 	var screen_width: float = get_viewport().get_visible_rect().size.x
@@ -223,24 +268,14 @@ func end_drag() -> void:
 
 	var opened_far_enough: bool = hinge_rot > open_angle * 0.5
 
-	if drag_target_left:
-		if opened_far_enough:
-			drag_page.animate_to_left()
-			current_sheet_index = drag_page.page_index + 1
-			normalize_current_sheet_index()
-		else:
-			drag_page.animate_to_right()
-			current_sheet_index = drag_page.page_index
-			normalize_current_sheet_index()
+	if opened_far_enough:
+		drag_page.animate_to_left()
+		current_sheet_index = drag_page.page_index + 1
 	else:
-		if opened_far_enough:
-			drag_page.animate_to_left()
-			current_sheet_index = drag_page.page_index + 1
-			normalize_current_sheet_index()
-		else:
-			drag_page.animate_to_right()
-			current_sheet_index = drag_page.page_index
-			normalize_current_sheet_index()
+		drag_page.animate_to_right()
+		current_sheet_index = drag_page.page_index
+
+	normalize_current_sheet_index()
 
 	is_dragging = false
 	drag_page = null
@@ -275,11 +310,9 @@ func enter_fan_mode() -> void:
 		if count > 1:
 			t = float(i) / float(count - 1)
 
-		# Reverse this lerp if the page order spreads the wrong way.
 		var angle_deg: float = lerp(fan_angle_range_degrees * 0.5, -fan_angle_range_degrees * 0.5, t)
 		var angle_rad: float = deg_to_rad(angle_deg) * fan_direction
 
-		# Keep all pages anchored at the same center/spine.
 		var target_pos: Vector3 = Vector3(
 			0.0,
 			fan_lift,
@@ -359,10 +392,14 @@ func get_fan_page_from_mouse(mouse_pos: Vector2) -> int:
 
 func get_sheet_screen_center(sheet: BookPage) -> Vector2:
 	var world_pos: Vector3 = sheet.page_mesh.global_transform.origin
-	var camera: Camera3D = get_viewport().get_camera_3d()
-	if camera == null:
+	var active_camera: Camera3D = camera
+	if active_camera == null:
+		active_camera = get_viewport().get_camera_3d()
+
+	if active_camera == null:
 		return Vector2.ZERO
-	return camera.unproject_position(world_pos)
+
+	return active_camera.unproject_position(world_pos)
 
 
 func jump_to_sheet(target_index: int) -> void:
