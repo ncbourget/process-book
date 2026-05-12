@@ -6,6 +6,20 @@
 [ext_resource type="Texture2D" uid="uid://btpdhboxcn75n" path="res://book_pages/page_003.jpg" id="4_tipki"]
 [ext_resource type="Texture2D" uid="uid://caao2ac7csajv" path="res://book_pages/page_004.jpg" id="5_85g3d"]
 [ext_resource type="Texture2D" uid="uid://c7mwp36tf36o7" path="res://book_pages/page_005.jpg" id="6_choun"]
+[ext_resource type="Texture2D" uid="uid://ldts4ilg1hwo" path="res://book_pages/page_006.jpg" id="7_a8y0u"]
+[ext_resource type="Texture2D" uid="uid://c1fgrqd40ys2w" path="res://book_pages/page_007.jpg" id="8_jkv2x"]
+[ext_resource type="Texture2D" uid="uid://deug7c7f5s3yy" path="res://book_pages/page_008.jpg" id="9_jbj1t"]
+[ext_resource type="Texture2D" uid="uid://c8i5lgthj1drq" path="res://book_pages/page_009.jpg" id="10_muem4"]
+[ext_resource type="Texture2D" uid="uid://jpmxqfjv36cj" path="res://book_pages/page_010.jpg" id="11_dp3eg"]
+[ext_resource type="Texture2D" uid="uid://p3uxt8dl8hpj" path="res://book_pages/page_011.jpg" id="12_0ld40"]
+[ext_resource type="Texture2D" uid="uid://b78hj6hfp35ht" path="res://book_pages/page_012.jpg" id="13_gqmmt"]
+[ext_resource type="Texture2D" uid="uid://b3trwvk56pcc7" path="res://book_pages/page_013.jpg" id="14_yc10j"]
+[ext_resource type="Texture2D" uid="uid://dtwt7d8pqy8bh" path="res://book_pages/page_014.jpg" id="15_gqmmt"]
+[ext_resource type="Texture2D" uid="uid://dsq37lljj2jv8" path="res://book_pages/page_015.jpg" id="16_yc10j"]
+[ext_resource type="Texture2D" uid="uid://bm1ufimqxx4m0" path="res://book_pages/page_016.jpg" id="17_jscy8"]
+[ext_resource type="Texture2D" uid="uid://cpoca3jfodls8" path="res://book_pages/page_017.jpg" id="18_pm3ni"]
+[ext_resource type="Texture2D" uid="uid://jac3gl0gyj3d" path="res://book_pages/page_018.jpg" id="19_y6deb"]
+[ext_resource type="Texture2D" uid="uid://ddsfab7ur0bjr" path="res://book_pages/page_019.jpg" id="20_og1vs"]
 
 [sub_resource type="Environment" id="Environment_0wfyh"]
 
@@ -26,6 +40,8 @@ transform = Transform3D(1, 0, 0, 0, 0.07276817, 0.9973489, 0, -0.9973489, 0.0727
 
 [node name="Book" parent="." unique_id=633167642 node_paths=PackedStringArray("camera_rig", "camera") instance=ExtResource("1_o5qli")]
 transform = Transform3D(8, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0)
-page_textures = Array[Texture2D]([ExtResource("2_tefeu"), ExtResource("3_o6xl0"), ExtResource("4_tipki"), ExtResource("5_85g3d"), ExtResource("6_choun")])
+page_textures = Array[Texture2D]([ExtResource("2_tefeu"), ExtResource("3_o6xl0"), ExtResource("4_tipki"), ExtResource("5_85g3d"), ExtResource("6_choun"), ExtResource("7_a8y0u"), ExtResource("8_jkv2x"), ExtResource("9_jbj1t"), ExtResource("10_muem4"), ExtResource("11_dp3eg"), ExtResource("12_0ld40"), ExtResource("13_gqmmt"), ExtResource("14_yc10j"), ExtResource("15_gqmmt"), ExtResource("16_yc10j"), ExtResource("17_jscy8"), ExtResource("18_pm3ni"), ExtResource("19_y6deb"), ExtResource("20_og1vs")])
 camera_rig = NodePath("../CameraRig")
 camera = NodePath("../CameraRig/Camera3D")
+zoom_max = 7.26
+zoom_scroll_sensitivity = 0.44

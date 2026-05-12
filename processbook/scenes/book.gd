@@ -3,7 +3,7 @@ extends Node3D
 @export var page_scene: PackedScene
 @export var pages_container_path: NodePath
 
-# Web-safe: drag your page images here in order.
+# WEB-SAFE: drag every exported page image here, in order.
 @export var page_textures: Array[Texture2D] = []
 
 @export var page_thickness: float = 0.00005
@@ -12,11 +12,19 @@ extends Node3D
 # Camera zoom
 @export var camera_rig: Node3D
 @export var camera: Camera3D
-@export_range(0.0, 1.0, 0.001) var zoom: float = 0.0
-@export var zoom_scroll_sensitivity: float = 0.08
+@export_range(0.0, 10.0, 0.001) var zoom: float = 0.0
+@export var zoom_min: float = 0.0
+@export var zoom_max: float = 7.5
+@export var zoom_scroll_sensitivity: float = 0.5
 @export var zoom_smooth_speed: float = 12.0
-@export var zoom_close_distance: float = 0.22
+@export var zoom_close_distance: float = 0.08
 @export var zoom_plane_y: float = 0.0
+@export var zoom_focus_clamp_x: float = 0.18
+@export var zoom_focus_clamp_z: float = 0.25
+
+# Page skipping
+@export var shift_skip_pages: int = 10
+@export var shift_skip_anim_stagger: float = 0.025
 
 # Fan mode
 @export var fan_angle_range_degrees: float = 160.0
@@ -37,10 +45,12 @@ var drag_target_left: bool = false
 var is_fan_mode: bool = false
 var fan_hovered_index: int = -1
 
+var is_skipping_pages: bool = false
+
 var zoom_target: float = 0.0
 var zoom_focus: Vector3 = Vector3.ZERO
-var base_camera_pos: Vector3 = Vector3.ZERO
-var base_camera_rot: Vector3 = Vector3.ZERO
+var base_camera_rig_pos: Vector3 = Vector3.ZERO
+var base_camera_rig_rot: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
@@ -51,10 +61,11 @@ func _ready() -> void:
 		camera_rig = camera
 
 	if camera_rig != null:
-		base_camera_pos = camera_rig.global_position
-		base_camera_rot = camera_rig.rotation
+		base_camera_rig_pos = camera_rig.global_position
+		base_camera_rig_rot = camera_rig.rotation
 
-	zoom_target = zoom
+	zoom_target = clamp(zoom, zoom_min, zoom_max)
+	zoom = zoom_target
 	zoom_focus = global_position
 
 	build_book()
@@ -63,7 +74,10 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE and not is_fan_mode:
-			flip_current_sheet_forward()
+			if Input.is_key_pressed(KEY_SHIFT):
+				skip_pages_forward(shift_skip_pages)
+			else:
+				flip_current_sheet_forward()
 		elif event.keycode == KEY_F:
 			toggle_fan_mode()
 
@@ -73,13 +87,13 @@ func _input(event: InputEvent) -> void:
 		var mouse_event: InputEventMouseButton = event as InputEventMouseButton
 
 		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			commit_zoom_focus(mouse_event.position)
-			zoom_target = clamp(zoom_target + zoom_scroll_sensitivity, 0.0, 1.0)
+			update_zoom_focus(mouse_event.position)
+			zoom_target = clamp(zoom_target + zoom_scroll_sensitivity, zoom_min, zoom_max)
 			return
 
 		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			commit_zoom_focus(mouse_event.position)
-			zoom_target = clamp(zoom_target - zoom_scroll_sensitivity, 0.0, 1.0)
+			update_zoom_focus(mouse_event.position)
+			zoom_target = clamp(zoom_target - zoom_scroll_sensitivity, zoom_min, zoom_max)
 			return
 
 	if is_fan_mode:
@@ -92,10 +106,10 @@ func _input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventMouseButton:
-		var mouse_event: InputEventMouseButton = event as InputEventMouseButton
-		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
-			if mouse_event.pressed:
-				start_drag(mouse_event.position)
+		var click_event: InputEventMouseButton = event as InputEventMouseButton
+		if click_event.button_index == MOUSE_BUTTON_LEFT:
+			if click_event.pressed:
+				start_drag(click_event.position)
 			else:
 				end_drag()
 
@@ -111,6 +125,49 @@ func _process(delta: float) -> void:
 		update_drag()
 
 
+func update_zoom_focus(mouse_pos: Vector2) -> void:
+	if camera == null:
+		return
+
+	var ray_origin: Vector3 = camera.project_ray_origin(mouse_pos)
+	var ray_dir: Vector3 = camera.project_ray_normal(mouse_pos)
+
+	if abs(ray_dir.y) < 0.00001:
+		return
+
+	var t: float = (zoom_plane_y - ray_origin.y) / ray_dir.y
+	if t < 0.0:
+		return
+
+	var hit: Vector3 = ray_origin + ray_dir * t
+
+	# Clamp focus around the book so scrolling near edges cannot launch away.
+	hit.x = clamp(hit.x, global_position.x - zoom_focus_clamp_x, global_position.x + zoom_focus_clamp_x)
+	hit.z = clamp(hit.z, global_position.z - zoom_focus_clamp_z, global_position.z + zoom_focus_clamp_z)
+
+	zoom_focus = hit
+
+
+func update_zoom(delta: float) -> void:
+	if camera_rig == null or camera == null:
+		return
+
+	var smooth: float = 1.0 - exp(-zoom_smooth_speed * delta)
+	zoom = lerp(zoom, zoom_target, smooth)
+
+	var zoom_alpha: float = zoom / max(zoom_max, 0.001)
+
+	var forward: Vector3 = -camera.global_transform.basis.z.normalized()
+	var focus_pos: Vector3 = base_camera_rig_pos.lerp(zoom_focus, zoom_alpha)
+	var desired_pos: Vector3 = focus_pos + forward * (zoom * zoom_close_distance)
+
+	camera_rig.global_position = camera_rig.global_position.lerp(desired_pos, smooth)
+
+	camera_rig.rotation.x = lerp_angle(camera_rig.rotation.x, base_camera_rig_rot.x, smooth)
+	camera_rig.rotation.y = lerp_angle(camera_rig.rotation.y, base_camera_rig_rot.y, smooth)
+	camera_rig.rotation.z = lerp_angle(camera_rig.rotation.z, base_camera_rig_rot.z, smooth)
+
+
 func build_book() -> void:
 	for child: Node in pages_container.get_children():
 		child.queue_free()
@@ -122,9 +179,10 @@ func build_book() -> void:
 	drag_target_left = false
 	is_fan_mode = false
 	fan_hovered_index = -1
+	is_skipping_pages = false
 
 	if page_textures.is_empty():
-		push_error("No page textures assigned. Drag your exported page images into the Page Textures array on the Book node.")
+		push_error("No page textures assigned. Drag your page images into Page Textures on the Book node.")
 		return
 
 	if page_textures.size() % 2 != 0:
@@ -160,44 +218,10 @@ func build_book() -> void:
 	normalize_current_sheet_index()
 
 
-func commit_zoom_focus(mouse_pos: Vector2) -> void:
-	if camera == null:
-		return
-
-	var ray_origin: Vector3 = camera.project_ray_origin(mouse_pos)
-	var ray_dir: Vector3 = camera.project_ray_normal(mouse_pos)
-
-	if abs(ray_dir.y) < 0.00001:
-		return
-
-	var t: float = (zoom_plane_y - ray_origin.y) / ray_dir.y
-	if t < 0.0:
-		return
-
-	zoom_focus = ray_origin + ray_dir * t
-
-
-func update_zoom(delta: float) -> void:
-	if camera_rig == null:
-		return
-
-	var smooth: float = 1.0 - exp(-zoom_smooth_speed * delta)
-	zoom = lerp(zoom, zoom_target, smooth)
-
-	var dir_from_focus: Vector3 = base_camera_pos - zoom_focus
-	if dir_from_focus.length() < 0.001:
-		return
-
-	var close_pos: Vector3 = zoom_focus + dir_from_focus.normalized() * zoom_close_distance
-	var desired_pos: Vector3 = base_camera_pos.lerp(close_pos, zoom)
-
-	camera_rig.global_position = camera_rig.global_position.lerp(desired_pos, smooth)
-	camera_rig.rotation.x = lerp_angle(camera_rig.rotation.x, base_camera_rot.x, smooth)
-	camera_rig.rotation.y = lerp_angle(camera_rig.rotation.y, base_camera_rot.y, smooth)
-	camera_rig.rotation.z = lerp_angle(camera_rig.rotation.z, base_camera_rot.z, smooth)
-
-
 func flip_current_sheet_forward() -> void:
+	if is_skipping_pages:
+		return
+
 	var index: int = get_next_right_sheet_index()
 	if index == -1:
 		return
@@ -208,8 +232,61 @@ func flip_current_sheet_forward() -> void:
 	normalize_current_sheet_index()
 
 
+func skip_pages_forward(page_amount: int) -> void:
+	if sheets.is_empty() or is_skipping_pages:
+		return
+
+	is_skipping_pages = true
+
+	var sheet_amount: int = max(1, int(ceil(float(page_amount) / 2.0)))
+	var start_index: int = current_sheet_index
+	var end_index: int = min(current_sheet_index + sheet_amount, sheets.size())
+
+	for i: int in range(start_index, end_index):
+		if i >= 0 and i < sheets.size():
+			var sheet: BookPage = sheets[i]
+			if not sheet.is_turned:
+				sheet.animate_to_left(0.18)
+				await get_tree().create_timer(shift_skip_anim_stagger).timeout
+
+	current_sheet_index = end_index
+	normalize_current_sheet_index()
+	is_skipping_pages = false
+
+
+func skip_pages_backward(page_amount: int) -> void:
+	if sheets.is_empty() or is_skipping_pages:
+		return
+
+	is_skipping_pages = true
+
+	var sheet_amount: int = max(1, int(ceil(float(page_amount) / 2.0)))
+	var start_index: int = current_sheet_index - 1
+	var end_index: int = max(current_sheet_index - sheet_amount, 0)
+
+	for i: int in range(start_index, end_index - 1, -1):
+		if i >= 0 and i < sheets.size():
+			var sheet: BookPage = sheets[i]
+			if sheet.is_turned:
+				sheet.animate_to_right(0.18)
+				await get_tree().create_timer(shift_skip_anim_stagger).timeout
+
+	current_sheet_index = end_index
+	normalize_current_sheet_index()
+	is_skipping_pages = false
+
+
 func start_drag(mouse_pos: Vector2) -> void:
-	if sheets.is_empty() or is_dragging:
+	if sheets.is_empty() or is_dragging or is_skipping_pages:
+		return
+
+	if Input.is_key_pressed(KEY_SHIFT):
+		var screen_width_shift: float = get_viewport().get_visible_rect().size.x
+		var clicked_left_shift: bool = mouse_pos.x < screen_width_shift * 0.5
+		if clicked_left_shift:
+			skip_pages_backward(shift_skip_pages)
+		else:
+			skip_pages_forward(shift_skip_pages)
 		return
 
 	var screen_width: float = get_viewport().get_visible_rect().size.x
@@ -313,11 +390,7 @@ func enter_fan_mode() -> void:
 		var angle_deg: float = lerp(fan_angle_range_degrees * 0.5, -fan_angle_range_degrees * 0.5, t)
 		var angle_rad: float = deg_to_rad(angle_deg) * fan_direction
 
-		var target_pos: Vector3 = Vector3(
-			0.0,
-			fan_lift,
-			-float(i) * page_thickness
-		)
+		var target_pos: Vector3 = Vector3(0.0, fan_lift, -float(i) * page_thickness)
 
 		tween.parallel().tween_property(sheet, "position", target_pos, fan_anim_time)
 
