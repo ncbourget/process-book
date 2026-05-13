@@ -7,7 +7,7 @@ extends Node3D
 
 # Positive = pages stack upward in Y.
 # If the stack visually goes down, flip this to -0.00005.
-@export var page_thickness: float = 0.00005
+@export var page_thickness: float = 0.000005
 
 # Left stack: front cover flat, later turned pages angle slightly upward.
 # Right stack: back cover flat, pages above it angle the opposite way.
