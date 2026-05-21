@@ -3,19 +3,20 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://f76mkqry6h5y"
-path="res://.godot/imported/page_016.jpg-6393ac30348e626d356abf45f698d790.ctex"
+path.s3tc="res://.godot/imported/page_016.jpg-6393ac30348e626d356abf45f698d790.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://book_pages/page_016.jpg"
-dest_files=["res://.godot/imported/page_016.jpg-6393ac30348e626d356abf45f698d790.ctex"]
+dest_files=["res://.godot/imported/page_016.jpg-6393ac30348e626d356abf45f698d790.s3tc.ctex"]
 
 [params]
 
-compress/mode=1
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
