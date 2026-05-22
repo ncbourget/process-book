@@ -5,16 +5,10 @@ extends Node3D
 
 @export var page_textures: Array[Texture2D] = []
 
-# Positive = pages stack upward in Y.
-# If the stack visually goes down, flip this to -0.00005.
 @export var page_thickness: float = 0.000005
-
-# Left stack: front cover flat, later turned pages angle slightly upward.
-# Right stack: back cover flat, pages above it angle the opposite way.
 @export var turned_stack_angle_step: float = 0.12
 @export var closed_stack_angle_step: float = -0.12
 
-# Camera zoom
 @export var camera_rig: Node3D
 @export var camera: Camera3D
 @export var cursor_marker: Node3D
@@ -25,6 +19,8 @@ extends Node3D
 @export var zoom_scroll_sensitivity: float = 0.5
 @export var trackpad_zoom_sensitivity: float = 0.035
 @export var invert_trackpad_zoom: bool = false
+@export var mobile_pinch_sensitivity: float = 0.01
+@export var invert_mobile_pinch: bool = false
 @export var zoom_smooth_speed: float = 12.0
 
 @export var zoom_plane_y: float = 0.0
@@ -33,7 +29,6 @@ extends Node3D
 @export var zoom_focus_clamp_x: float = 0.22
 @export var zoom_focus_clamp_z: float = 0.30
 
-# Page skipping
 @export var shift_skip_pages: int = 10
 
 @onready var pages_container: Node3D = get_node(pages_container_path) as Node3D
@@ -45,6 +40,9 @@ var is_dragging: bool = false
 var drag_page: BookPage = null
 var drag_target_left: bool = false
 var is_skipping_pages: bool = false
+
+var active_touches: Dictionary = {}
+var last_pinch_distance: float = 0.0
 
 var zoom_target: float = 0.0
 var zoom_focus: Vector3 = Vector3.ZERO
@@ -71,6 +69,25 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		var touch_event: InputEventScreenTouch = event as InputEventScreenTouch
+
+		if touch_event.pressed:
+			active_touches[touch_event.index] = touch_event.position
+		else:
+			active_touches.erase(touch_event.index)
+			last_pinch_distance = 0.0
+
+		return
+
+	if event is InputEventScreenDrag:
+		var drag_event: InputEventScreenDrag = event as InputEventScreenDrag
+		active_touches[drag_event.index] = drag_event.position
+
+		if active_touches.size() >= 2:
+			handle_pinch_zoom()
+			return
+
 	if event is InputEventPanGesture:
 		var pan_event: InputEventPanGesture = event as InputEventPanGesture
 		var direction: float = -pan_event.delta.y
@@ -123,6 +140,37 @@ func _process(delta: float) -> void:
 
 	if is_dragging and drag_page != null:
 		update_drag()
+
+
+func handle_pinch_zoom() -> void:
+	var keys: Array = active_touches.keys()
+
+	if keys.size() < 2:
+		return
+
+	var p1: Vector2 = active_touches[keys[0]]
+	var p2: Vector2 = active_touches[keys[1]]
+	var current_distance: float = p1.distance_to(p2)
+	var center: Vector2 = (p1 + p2) * 0.5
+
+	update_zoom_focus(center)
+
+	if last_pinch_distance <= 0.0:
+		last_pinch_distance = current_distance
+		return
+
+	var delta_distance: float = current_distance - last_pinch_distance
+
+	if invert_mobile_pinch:
+		delta_distance *= -1.0
+
+	zoom_target = clamp(
+		zoom_target + delta_distance * mobile_pinch_sensitivity,
+		zoom_min,
+		zoom_max
+	)
+
+	last_pinch_distance = current_distance
 
 
 func update_cursor_marker() -> void:
@@ -256,9 +304,6 @@ func update_stack_targets() -> void:
 		var sheet: BookPage = sheets[i]
 
 		if i < current_sheet_index:
-			# LEFT / TURNED STACK
-			# Front cover is layer 0 and stays flat.
-			# Each later turned page sits higher and turns a little more.
 			var open_layer: int = i
 
 			sheet.position = Vector3(
@@ -272,9 +317,6 @@ func update_stack_targets() -> void:
 			)
 
 		else:
-			# RIGHT / CLOSED STACK
-			# Back cover is layer 0 and stays flat.
-			# Pages above it sit higher and turn the opposite way.
 			var closed_layer: int = (total - 1) - i
 
 			sheet.position = Vector3(
