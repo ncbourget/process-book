@@ -29,6 +29,11 @@ extends Node3D
 @export var zoom_focus_clamp_x: float = 0.22
 @export var zoom_focus_clamp_z: float = 0.30
 
+@export var mobile_zoomed_threshold: float = 0.35
+@export var mobile_pan_sensitivity: float = 0.0015
+@export var mobile_pan_clamp_x: float = 0.35
+@export var mobile_pan_clamp_z: float = 0.45
+
 @export var shift_skip_pages: int = 10
 
 @onready var pages_container: Node3D = get_node(pages_container_path) as Node3D
@@ -44,6 +49,8 @@ var is_skipping_pages: bool = false
 var active_touches: Dictionary = {}
 var last_pinch_distance: float = 0.0
 var is_pinching: bool = false
+var last_single_touch_pos: Vector2 = Vector2.ZERO
+var mobile_pan_offset: Vector3 = Vector3.ZERO
 
 var zoom_target: float = 0.0
 var zoom_focus: Vector3 = Vector3.ZERO
@@ -82,7 +89,10 @@ func _input(event: InputEvent) -> void:
 				last_pinch_distance = 0.0
 				handle_pinch_zoom()
 			elif not is_pinching:
-				start_drag(touch_event.position)
+				last_single_touch_pos = touch_event.position
+
+				if zoom_target <= mobile_zoomed_threshold:
+					start_drag(touch_event.position)
 		else:
 			active_touches.erase(touch_event.index)
 
@@ -109,10 +119,15 @@ func _input(event: InputEvent) -> void:
 			handle_pinch_zoom()
 			return
 
-		if is_dragging and not is_pinching:
-			update_drag_at(drag_event.position)
+		if active_touches.size() == 1 and not is_pinching:
+			if zoom_target > mobile_zoomed_threshold:
+				update_mobile_pan(drag_event.position - last_single_touch_pos)
+				last_single_touch_pos = drag_event.position
+			else:
+				if is_dragging:
+					update_drag_at(drag_event.position)
 
-		return
+			return
 
 	if event is InputEventPanGesture:
 		var pan_event: InputEventPanGesture = event as InputEventPanGesture
@@ -203,6 +218,36 @@ func handle_pinch_zoom() -> void:
 	last_pinch_distance = current_distance
 
 
+func update_mobile_pan(delta: Vector2) -> void:
+	if camera == null:
+		return
+
+	var right: Vector3 = camera.global_transform.basis.x.normalized()
+	var forward_flat: Vector3 = -camera.global_transform.basis.z.normalized()
+	forward_flat.y = 0.0
+
+	if forward_flat.length() > 0.00001:
+		forward_flat = forward_flat.normalized()
+
+	var move: Vector3 = (
+		-right * delta.x +
+		forward_flat * delta.y
+	) * mobile_pan_sensitivity
+
+	mobile_pan_offset += move
+
+	mobile_pan_offset.x = clamp(
+		mobile_pan_offset.x,
+		-mobile_pan_clamp_x,
+		mobile_pan_clamp_x
+	)
+	mobile_pan_offset.z = clamp(
+		mobile_pan_offset.z,
+		-mobile_pan_clamp_z,
+		mobile_pan_clamp_z
+	)
+
+
 func cancel_drag() -> void:
 	if not is_dragging:
 		return
@@ -277,6 +322,7 @@ func update_zoom(delta: float) -> void:
 
 	var desired_pos: Vector3 = (
 		base_camera_rig_pos
+		+ mobile_pan_offset
 		+ flat_focus_offset * zoom_focus_strength * zoom_alpha
 		+ forward * zoom * zoom_forward_strength
 	)
@@ -289,6 +335,9 @@ func update_zoom(delta: float) -> void:
 	camera_rig.rotation.x = lerp_angle(camera_rig.rotation.x, base_camera_rig_rot.x, smooth)
 	camera_rig.rotation.y = lerp_angle(camera_rig.rotation.y, base_camera_rig_rot.y, smooth)
 	camera_rig.rotation.z = lerp_angle(camera_rig.rotation.z, base_camera_rig_rot.z, smooth)
+
+	if zoom < mobile_zoomed_threshold * 0.5:
+		mobile_pan_offset = mobile_pan_offset.lerp(Vector3.ZERO, smooth)
 
 
 func build_book() -> void:
@@ -304,6 +353,8 @@ func build_book() -> void:
 	active_touches.clear()
 	last_pinch_distance = 0.0
 	is_pinching = false
+	last_single_touch_pos = Vector2.ZERO
+	mobile_pan_offset = Vector3.ZERO
 
 	if page_textures.is_empty():
 		push_error("No page textures assigned. Drag your page images into Page Textures on the Book node.")
