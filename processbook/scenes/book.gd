@@ -19,7 +19,7 @@ extends Node3D
 @export var zoom_scroll_sensitivity: float = 0.5
 @export var trackpad_zoom_sensitivity: float = 0.035
 @export var invert_trackpad_zoom: bool = false
-@export var mobile_pinch_sensitivity: float = 0.01
+@export var mobile_pinch_sensitivity: float = 0.008
 @export var invert_mobile_pinch: bool = false
 @export var zoom_smooth_speed: float = 12.0
 
@@ -43,6 +43,7 @@ var is_skipping_pages: bool = false
 
 var active_touches: Dictionary = {}
 var last_pinch_distance: float = 0.0
+var is_pinching: bool = false
 
 var zoom_target: float = 0.0
 var zoom_focus: Vector3 = Vector3.ZERO
@@ -74,9 +75,27 @@ func _input(event: InputEvent) -> void:
 
 		if touch_event.pressed:
 			active_touches[touch_event.index] = touch_event.position
+
+			if active_touches.size() >= 2:
+				cancel_drag()
+				is_pinching = true
+				last_pinch_distance = 0.0
+				handle_pinch_zoom()
+			elif not is_pinching:
+				start_drag(touch_event.position)
 		else:
 			active_touches.erase(touch_event.index)
-			last_pinch_distance = 0.0
+
+			if is_pinching:
+				cancel_drag()
+			elif is_dragging:
+				end_drag()
+
+			if active_touches.size() < 2:
+				last_pinch_distance = 0.0
+
+			if active_touches.is_empty():
+				is_pinching = false
 
 		return
 
@@ -85,8 +104,15 @@ func _input(event: InputEvent) -> void:
 		active_touches[drag_event.index] = drag_event.position
 
 		if active_touches.size() >= 2:
+			cancel_drag()
+			is_pinching = true
 			handle_pinch_zoom()
 			return
+
+		if is_dragging and not is_pinching:
+			update_drag_at(drag_event.position)
+
+		return
 
 	if event is InputEventPanGesture:
 		var pan_event: InputEventPanGesture = event as InputEventPanGesture
@@ -101,6 +127,9 @@ func _input(event: InputEvent) -> void:
 			zoom_min,
 			zoom_max
 		)
+		return
+
+	if active_touches.size() > 0 or is_pinching:
 		return
 
 	if event is InputEventMouseButton:
@@ -138,8 +167,8 @@ func _process(delta: float) -> void:
 	update_cursor_marker()
 	update_zoom(delta)
 
-	if is_dragging and drag_page != null:
-		update_drag()
+	if is_dragging and drag_page != null and active_touches.is_empty():
+		update_drag_at(get_viewport().get_mouse_position())
 
 
 func handle_pinch_zoom() -> void:
@@ -148,8 +177,9 @@ func handle_pinch_zoom() -> void:
 	if keys.size() < 2:
 		return
 
-	var p1: Vector2 = active_touches[keys[0]]
-	var p2: Vector2 = active_touches[keys[1]]
+	var p1: Vector2 = active_touches[keys[0]] as Vector2
+	var p2: Vector2 = active_touches[keys[1]] as Vector2
+
 	var current_distance: float = p1.distance_to(p2)
 	var center: Vector2 = (p1 + p2) * 0.5
 
@@ -171,6 +201,16 @@ func handle_pinch_zoom() -> void:
 	)
 
 	last_pinch_distance = current_distance
+
+
+func cancel_drag() -> void:
+	if not is_dragging:
+		return
+
+	is_dragging = false
+	drag_page = null
+	drag_target_left = false
+	apply_reading_state(true)
 
 
 func update_cursor_marker() -> void:
@@ -261,6 +301,9 @@ func build_book() -> void:
 	drag_page = null
 	drag_target_left = false
 	is_skipping_pages = false
+	active_touches.clear()
+	last_pinch_distance = 0.0
+	is_pinching = false
 
 	if page_textures.is_empty():
 		push_error("No page textures assigned. Drag your page images into Page Textures on the Book node.")
@@ -416,7 +459,7 @@ func skip_pages_backward(page_amount: int) -> void:
 
 
 func start_drag(mouse_pos: Vector2) -> void:
-	if sheets.is_empty() or is_dragging or is_skipping_pages:
+	if sheets.is_empty() or is_dragging or is_skipping_pages or is_pinching:
 		return
 
 	update_stack_targets()
@@ -454,17 +497,15 @@ func start_drag(mouse_pos: Vector2) -> void:
 	is_dragging = true
 
 
-func update_drag() -> void:
+func update_drag_at(mouse_pos: Vector2) -> void:
 	if drag_page == null:
 		return
 
-	var mouse_x: float = get_viewport().get_mouse_position().x
 	var screen_width: float = get_viewport().get_visible_rect().size.x
-
 	if screen_width <= 0.0:
 		return
 
-	var t: float = mouse_x / screen_width
+	var t: float = mouse_pos.x / screen_width
 	t = clamp(t, 0.0, 1.0)
 
 	var progress: float = 1.0 - t
