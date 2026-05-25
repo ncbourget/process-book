@@ -287,7 +287,7 @@ zoom_scroll_sensitivity = 0.8
 trackpad_zoom_sensitivity = 0.05
 
 [node name="note" parent="." unique_id=1742636990 instance=ExtResource("210_mm77e")]
-transform = Transform3D(0.27437893, 0, 0.055823024, 0, 0.28, 0, -0.055823024, 0, 0.27437893, -0.68431234, -0.027120963, -0.037614822)
+transform = Transform3D(0.27198502, 0, 0.066514075, 0, 0.2799999, 0, -0.066514075, 0, 0.27198502, -0.64167684, -0.027120963, -0.05921235)
 
 [node name="note2" parent="." unique_id=1431127479 instance=ExtResource("257_bljxb")]
-transform = Transform3D(0.26873475, 0, -0.026108189, 0, 0.27, 0, 0.026108189, 0, 0.26873475, -0.18573718, -0.039963648, -0.2406143)
+transform = Transform3D(0.26817966, 0, 0.031299837, 0, 0.26999998, 0, -0.031299837, 0, 0.26817966, -0.19833532, -0.039963648, -0.2560446)
